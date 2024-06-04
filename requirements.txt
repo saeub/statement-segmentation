@@ -1,0 +1,5 @@
+transformers[torch]==4.41.1
+pandas==2.2.2
+matplotlib==3.9.0
+spacy==3.7.4
+https://github.com/explosion/spacy-models/releases/download/de_dep_news_trf-3.7.2/de_dep_news_trf-3.7.2.tar.gz
