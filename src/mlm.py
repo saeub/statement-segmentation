@@ -1,5 +1,20 @@
 # %%
+import logging
+
+logging.basicConfig(level=logging.INFO)
+from collections.abc import Collection, Sequence
+
 from torch.utils.data import Dataset
+from transformers import (
+    AutoModelForTokenClassification,
+    AutoTokenizer,
+    DataCollatorForTokenClassification,
+    Trainer,
+    TrainingArguments,
+)
+
+from data import Sentence, load_sentences
+from model import Task1Model, Task2Model
 
 
 class TokenTaggedDataset(Dataset):
@@ -54,59 +69,75 @@ class TokenTaggedDataset(Dataset):
         return self.data[idx]
 
 
+class MLMModel(Task1Model, Task2Model):
+    def __init__(self, model_name: str):
+        self.model_name = model_name
+        self.tokenizer = AutoTokenizer.from_pretrained(model_name)
+        self.model = AutoModelForTokenClassification.from_pretrained(model_name)
+        self.logger = logging.getLogger(self.__class__.__name__)
+
+    def train(
+        self,
+        train_sentences: Collection[Sentence],
+        eval_sentences: Collection[Sentence],
+    ):
+        self.logger.info("Preprocessing data...")
+        train_dataset = TokenTaggedDataset(train_sentences, self.tokenizer)
+        eval_dataset = TokenTaggedDataset(eval_sentences, self.tokenizer)
+
+        training_args = TrainingArguments(
+            output_dir=f"./{self.model_name}-output",
+            num_train_epochs=1,
+            per_device_train_batch_size=16,
+            logging_dir="./mlm-logs",
+            logging_steps=10,
+            eval_strategy="steps",
+            eval_steps=10,
+            save_strategy="epoch",
+        )
+        data_collator = DataCollatorForTokenClassification(self.tokenizer)
+        trainer = Trainer(
+            model=self.model,
+            args=training_args,
+            train_dataset=train_dataset,
+            eval_dataset=eval_dataset,
+            data_collator=data_collator,
+        )
+
+        self.logger.info("Training...")
+        trainer.train()
+
+    def save(self, path: str):
+        self.model.save_pretrained(path)
+        self.tokenizer.save_pretrained(path)
+
+    def predict_num_statements(self, sentences: Sequence[Sentence]) -> Sequence[int]:
+        pred = []
+        for sentence in sentences:
+            encoded = self.tokenizer(
+                sentence.clean_text, truncation=True, return_tensors="pt"
+            )
+            outputs = self.model(**encoded)
+            pred.append(outputs.logits.argmax(-1).sum().item())
+        return pred
+
+    def predict_statement_spans(
+        self, sentences: Sequence[Sentence]
+    ) -> Sequence[list[int]]:
+        raise NotImplementedError()
+
+
 # %%
-from transformers import AutoModelForTokenClassification, AutoTokenizer
-
-tokenizer = AutoTokenizer.from_pretrained("google-bert/bert-base-german-cased")
-model = AutoModelForTokenClassification.from_pretrained(
-    "google-bert/bert-base-german-cased"
-)
+train_sentences = load_sentences("train")
+test_sentences = load_sentences("test")
 
 # %%
-from data import load_data
-
-train_data = load_data("train")
-train_dataset = TokenTaggedDataset(train_data, tokenizer)
-test_data = load_data("test")
-test_dataset = TokenTaggedDataset(test_data, tokenizer)
+model = MLMModel("google-bert/bert-base-german-cased")
+model.train(train_sentences, test_sentences)
+model.save("mlm-2epoch-batch16")
 
 # %%
-from transformers import DataCollatorForTokenClassification, Trainer, TrainingArguments
-
-model = AutoModelForTokenClassification.from_pretrained(
-    "google-bert/bert-base-german-cased"
-)
-
-training_args = TrainingArguments(
-    output_dir="./mlm-output",
-    num_train_epochs=1,
-    per_device_train_batch_size=8,
-    logging_dir="./mlm-logs",
-    logging_steps=10,
-    eval_strategy="steps",
-    eval_steps=10,
-)
-
-trainer = Trainer(
-    model=model,
-    args=training_args,
-    train_dataset=train_data,
-    eval_dataset=test_dataset,
-    data_collator=DataCollatorForTokenClassification(tokenizer),
-)
-
-trainer.train()
+model = MLMModel("./mlm-2epoch-batch16")
 
 # %%
-correct = total = 0
-for sentence in test_sentences:
-    encoded = tokenizer(sentence.clean_text, truncation=True, return_tensors="pt")
-    outputs = model(**encoded)
-    pred = outputs.logits.argmax(-1).sum()
-    print(sentence.clean_text)
-    print(outputs.logits.argmax(-1))
-    print(pred.item(), len(sentence.statement_spans), sentence.clean_text)
-    correct += int(pred.item() == len(sentence.statement_spans))
-    total += 1
-
-correct / total
+model.evaluate_num_statements(test_sentences)

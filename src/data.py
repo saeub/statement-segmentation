@@ -115,7 +115,7 @@ class Sentence:
 DATA_PATH = Path(__name__).absolute().parent.parent / "data"
 
 
-def load_data(name: str) -> pd.DataFrame:
+def load_sentences(name: str) -> list[Sentence]:
     data = pd.read_csv(DATA_PATH / f"{name}.csv")
-    data["sentence"] = data.apply(Sentence.from_row, axis=1)
-    return data
+    sentences = list(data.apply(Sentence.from_row, axis=1))
+    return sentences
