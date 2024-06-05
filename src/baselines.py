@@ -43,12 +43,15 @@ class MajorityBaseline(Task1Model):
         return [self.majority_count] * len(sentences)
 
 
-class VerbBaseline(Task1Model):
+class POSBaseline(Task1Model):
+    def __init__(self, pos: list[str] = ["VERB"]):
+        self.pos = pos
+
     def predict_num_statements(self, sentences: Sequence[Sentence]) -> list[int]:
         pred = []
         for sentence in sentences:
-            pos = [token.pos_ for tokens in sentence.spacy_tokens for token in tokens]
-            pred.append(pos.count("VERB"))
+            tags = [token.pos_ for tokens in sentence.spacy_tokens for token in tokens]
+            pred.append(sum(tags.count(pos) for pos in self.pos))
         return pred
 
 # %%
@@ -64,14 +67,18 @@ random_baseline = RandomBaseline()
 random_baseline.train(train_sentences)
 baselines.append(random_baseline)
 
-verb_baseline = VerbBaseline()
+verb_baseline = POSBaseline(["VERB", "AUX"])
 baselines.append(verb_baseline)
 
 majority_baseline = MajorityBaseline()
 majority_baseline.train(train_sentences)
 baselines.append(majority_baseline)
 
-# %%
 for baseline in baselines:
     metrics = baseline.evaluate_num_statements(test_sentences)
     print(f"{baseline.__class__.__name__}: {metrics}")
+
+# %%
+errors = verb_baseline.errors(test_sentences)
+for error in errors:
+    print(error.pred, error.true, error.sentence.clean_text)
