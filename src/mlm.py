@@ -14,7 +14,7 @@ from transformers import (
 )
 
 from data import Sentence, load_sentences
-from model import Task1Model, Task2Model
+from model import Task2Model
 
 
 class TokenTaggedDataset(Dataset):
@@ -71,7 +71,7 @@ class TokenTaggedDataset(Dataset):
         return self.data[idx]
 
 
-class MLMModel(Task1Model, Task2Model):
+class MLMModel(Task2Model):
     def __init__(self, model_name: str):
         self.model_name = model_name
         self.tokenizer = AutoTokenizer.from_pretrained(model_name)
@@ -116,6 +116,8 @@ class MLMModel(Task1Model, Task2Model):
     def predict_num_statements(
         self, sentences: Iterable[Sentence]
     ) -> Generator[int, None, None]:
+        # Using the unprocessed span tags (i.e., not ignoring punctuation etc.)
+        # appears to work better for predicting the number of statements
         for sentence in sentences:
             encoded = self.tokenizer(
                 sentence.clean_text, truncation=True, return_tensors="pt"
@@ -190,7 +192,6 @@ class MLMModel(Task1Model, Task2Model):
 
             def get_descendants(token, stop=()):
                 # Stop to avoid overlapping spans
-                print(token, token.pos_, token.dep_)
                 if token in stop or ignore(token):
                     return []
                 descendants = [token]
@@ -245,7 +246,6 @@ for error in model.errors(train_sentences):
     print(error.pred, error.true, error.sentence.clean_text)
 
 # %%
-
 for true_sentence, spans in zip(
     test_sentences, model.predict_statement_spans(test_sentences)
 ):
@@ -257,3 +257,6 @@ for true_sentence, spans in zip(
         clean_tokens=true_sentence.clean_tokens,
         statement_spans=spans,
     )
+
+# %%
+model.evaluate_statement_spans(test_sentences)
