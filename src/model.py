@@ -1,18 +1,22 @@
 from abc import ABC, abstractmethod
-from collections.abc import Sequence
+from collections import namedtuple
+from collections.abc import Generator, Iterable
 from math import sqrt
 from statistics import mean
 
 from data import Sentence
 
 
+Error = namedtuple("Error", ["sentence", "true", "pred"])
+
+
 class Task1Model(ABC):
     @abstractmethod
-    def predict_num_statements(self, sentences: Sequence[Sentence]) -> Sequence[int]:
+    def predict_num_statements(self, sentences: Iterable[Sentence]) -> Iterable[int]:
         pass
 
     def evaluate_num_statements(
-        self, sentences: Sequence[Sentence]
+        self, sentences: Iterable[Sentence]
     ) -> dict[str, float]:
         true_num_statements = [len(sentence.statement_spans) for sentence in sentences]
         pred_num_statements = self.predict_num_statements(sentences)
@@ -41,15 +45,25 @@ class Task1Model(ABC):
 
         return metrics
 
+    def errors(self, sentences: Iterable[Sentence]) -> Generator[Error, None, None]:
+        true_num_statements = (len(sentence.statement_spans) for sentence in sentences)
+        pred_num_statements = self.predict_num_statements(sentences)
+
+        for sentence, true, pred in zip(
+            sentences, true_num_statements, pred_num_statements
+        ):
+            if true != pred:
+                yield Error(sentence=sentence, true=true, pred=pred)
+
 
 class Task2Model(ABC):
     @abstractmethod
     def predict_statement_spans(
-        self, sentence: Sequence[Sentence]
-    ) -> Sequence[list[int]]:
+        self, sentence: Iterable[Sentence]
+    ) -> Iterable[list[int]]:
         pass
 
     def evaluate_statement_spans(
-        self, sentences: Sequence[Sentence]
+        self, sentences: Iterable[Sentence]
     ) -> dict[str, float]:
         raise NotImplementedError()

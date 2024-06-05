@@ -2,7 +2,7 @@
 import logging
 
 logging.basicConfig(level=logging.INFO)
-from collections.abc import Collection, Sequence
+from collections.abc import Collection, Generator, Iterable
 
 from torch.utils.data import Dataset
 from transformers import (
@@ -20,6 +20,8 @@ from model import Task1Model, Task2Model
 class TokenTaggedDataset(Dataset):
     def __init__(self, sentences, tokenizer):
         self.data = []
+
+        # TODO: Refactor preprocessing into separate function
 
         for sentence in sentences:
             # Get character-level locations of statement tags
@@ -111,20 +113,116 @@ class MLMModel(Task1Model, Task2Model):
         self.model.save_pretrained(path)
         self.tokenizer.save_pretrained(path)
 
-    def predict_num_statements(self, sentences: Sequence[Sentence]) -> Sequence[int]:
-        pred = []
+    def predict_num_statements(
+        self, sentences: Iterable[Sentence]
+    ) -> Generator[int, None, None]:
         for sentence in sentences:
             encoded = self.tokenizer(
                 sentence.clean_text, truncation=True, return_tensors="pt"
             )
             outputs = self.model(**encoded)
-            pred.append(outputs.logits.argmax(-1).sum().item())
-        return pred
+            yield outputs.logits.argmax(-1).sum().item()
 
     def predict_statement_spans(
-        self, sentences: Sequence[Sentence]
-    ) -> Sequence[list[int]]:
-        raise NotImplementedError()
+        self, sentences: Iterable[Sentence]
+    ) -> Generator[list[int]]:
+        for sentence in sentences:
+            encoded = self.tokenizer(
+                sentence.clean_text,
+                truncation=True,
+                return_tensors="pt",
+                return_offsets_mapping=True,
+            )
+            offset_mapping = encoded.pop("offset_mapping")[0]
+
+            outputs = self.model(**encoded)
+            labels = outputs.logits.argmax(-1)[0]
+
+            if sum(labels) == 0:
+                yield []
+                continue
+
+            if sum(labels) == 1:
+                yield [[i for i in range(len(sentence.tokens))]]
+                continue
+
+            # TODO: Refactor postprocessing into separate function
+
+            # Get character-level locations of statement tags
+            tag_locations = set()
+            for label, (start, end) in zip(labels, offset_mapping):
+                if start == 0 and end == 0:
+                    continue
+                if label == 1:
+                    tag_locations.add(start)
+
+            # Map character-level locations to token-level indices
+            tag_indices = []
+            location = 0
+            for i, token in enumerate(sentence.clean_tokens):
+                if not tag_locations:
+                    break
+                next_tag_location = min(tag_locations)
+                if location >= next_tag_location:
+                    tag_indices.append(i)
+                    tag_locations.remove(next_tag_location)
+                location += len(token) + (token != "")  # token + whitespace
+
+            spans = [[i] for i in tag_indices]
+
+            def ignore(token):
+                return token.dep_ == "punct" or token.pos_ == "DET"
+
+            # Find root token of each span
+            tag_roots = []
+            for span in spans:
+                spacy_tokens = [
+                    token
+                    for i in span
+                    for token in sentence.spacy_tokens[i]
+                    if not ignore(token)
+                ]
+                if not spacy_tokens:
+                    # Probably punctuation or determiner was tagged, ignore this span
+                    continue
+                root = min(spacy_tokens, key=lambda token: len(list(token.ancestors)))
+                tag_roots.append(root)
+
+            def get_descendants(token, stop=()):
+                # Stop to avoid overlapping spans
+                print(token, token.pos_, token.dep_)
+                if token in stop or ignore(token):
+                    return []
+                descendants = [token]
+                for child in token.children:
+                    descendants.extend(get_descendants(child, stop=stop))
+                return descendants
+
+            # Handle deepest spans first
+            tag_roots.sort(key=lambda token: len(list(token.ancestors)), reverse=True)
+
+            # Expand spans to include all descendants in dependency tree
+            spacy_token_to_index = {
+                token: i
+                for i, tokens in enumerate(sentence.spacy_tokens)
+                for token in tokens
+            }
+            expanded_spans = []
+            used_descendants = set()
+            for root in tag_roots:
+                descendants = get_descendants(root, stop=used_descendants)
+                used_descendants.update(descendants)
+                # Convert tokens to indices, deduplicate, and sort
+                span = sorted({spacy_token_to_index[token] for token in descendants})
+                expanded_spans.append(span)
+
+            # There should be no overlap
+            for i, span in enumerate(expanded_spans):
+                for j, other_span in enumerate(expanded_spans):
+                    if i != j:
+                        assert not set(span) & set(other_span)
+
+            yield expanded_spans
 
 
 # %%
@@ -141,3 +239,21 @@ model = MLMModel("./mlm-2epoch-batch16")
 
 # %%
 model.evaluate_num_statements(test_sentences)
+
+# %%
+for error in model.errors(train_sentences):
+    print(error.pred, error.true, error.sentence.clean_text)
+
+# %%
+
+for true_sentence, spans in zip(
+    test_sentences, model.predict_statement_spans(test_sentences)
+):
+    pred_sentence = Sentence(
+        id=true_sentence.id,
+        topic=true_sentence.topic,
+        text=true_sentence.text,
+        tokens=true_sentence.tokens,
+        clean_tokens=true_sentence.clean_tokens,
+        statement_spans=spans,
+    )

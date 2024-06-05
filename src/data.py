@@ -2,6 +2,7 @@
 import ast
 import re
 from dataclasses import dataclass
+from functools import cached_property
 from pathlib import Path
 
 import pandas as pd
@@ -12,7 +13,7 @@ nlp = spacy.load("de_dep_news_trf")
 
 
 # %%
-@dataclass
+@dataclass(frozen=True)
 class Sentence:
     id: int
     topic: str
@@ -54,7 +55,7 @@ class Sentence:
             statement_spans=spans,
         )
 
-    @property
+    @cached_property
     def clean_text(self) -> str:
         """Whitespace-cleaned text."""
         text = ""
@@ -75,12 +76,9 @@ class Sentence:
             statements.append(" ".join(tokens))
         return statements
 
-    @property
+    @cached_property
     def spacy_tokens(self) -> list[list[spacy.tokens.Token]]:
         """spaCy tokens parsed based on cleaned text but aligned with original (uncleaned) tokens."""
-        if hasattr(self, "_spacy_tokens"):
-            return self._spacy_tokens
-
         doc = nlp(self.clean_text)
 
         # Map spacy tokens to self tokens
@@ -107,8 +105,7 @@ class Sentence:
                 self_token_index += 1
                 partial_token = ""
 
-        self._spacy_tokens = spacy_tokens
-        return self._spacy_tokens
+        return spacy_tokens
 
 
 # %%
