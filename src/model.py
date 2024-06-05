@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
+from collections.abc import Sequence
 from math import sqrt
 from statistics import mean
-from typing import Sequence
 
 from data import Sentence
 
