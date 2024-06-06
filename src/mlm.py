@@ -91,7 +91,6 @@ class MLMModel(Task2Model):
             output_dir=f"./{self.model_name}-output",
             num_train_epochs=1,
             per_device_train_batch_size=16,
-            logging_dir="./mlm-logs",
             logging_steps=10,
             eval_strategy="steps",
             eval_steps=10,
@@ -173,7 +172,7 @@ class MLMModel(Task2Model):
             spans = [[i] for i in tag_indices]
 
             def ignore(token):
-                return token.dep_ == "punct" or token.pos_ == "DET"
+                return token.dep_ == "punct" or token.dep_ == "cc" or token.pos_ == "DET"
 
             # Find root token of each span
             tag_roots = []
@@ -231,18 +230,18 @@ train_sentences = load_sentences("train")
 test_sentences = load_sentences("test")
 
 # %%
-model = MLMModel("google-bert/bert-base-german-cased")
+model = MLMModel("google-bert/bert-base-multilingual-cased")
 model.train(train_sentences, test_sentences)
-model.save("mlm-2epoch-batch16")
+model.save("bert-multi-1epoch-batch16")
 
 # %%
-model = MLMModel("./mlm-2epoch-batch16")
+model = MLMModel("./bert-multi-1epoch-batch16")
 
 # %%
 model.evaluate_num_statements(test_sentences)
 
 # %%
-for error in model.errors(train_sentences):
+for error in model.errors(test_sentences):
     print(error.pred, error.true, error.sentence.clean_text)
 
 # %%
@@ -257,6 +256,11 @@ for true_sentence, spans in zip(
         clean_tokens=true_sentence.clean_tokens,
         statement_spans=spans,
     )
+    if len(true_sentence.statement_spans) > 1:
+        print(true_sentence.clean_text)
+        print(true_sentence.statements)
+        print(pred_sentence.statements)
+        print()
 
 # %%
 model.evaluate_statement_spans(test_sentences)
