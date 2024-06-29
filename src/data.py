@@ -69,10 +69,10 @@ class Sentence:
 
     @property
     def statements(self) -> list[str]:
-        """Statement spans as (uncleaned) strings."""
+        """Statement spans as (cleaned) strings."""
         statements = []
         for span in self.statement_spans:
-            tokens = [self.tokens[i] for i in span]
+            tokens = [clean_token for i in span if (clean_token := self.clean_tokens[i])]
             statements.append(" ".join(tokens))
         return statements
 
