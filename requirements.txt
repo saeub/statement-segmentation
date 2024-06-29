@@ -3,5 +3,6 @@ sentencepiece==0.2.0
 protobuf==5.27.0
 pandas==2.2.2
 matplotlib==3.9.0
+requests==2.32.2
 spacy==3.7.4
 https://github.com/explosion/spacy-models/releases/download/de_dep_news_trf-3.7.2/de_dep_news_trf-3.7.2.tar.gz
