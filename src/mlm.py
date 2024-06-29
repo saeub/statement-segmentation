@@ -1,5 +1,6 @@
 # %%
 import logging
+import random
 
 logging.basicConfig(level=logging.INFO)
 from collections.abc import Collection, Generator, Iterable
@@ -63,6 +64,7 @@ class TokenTaggedDataset(Dataset):
             del encoded["offset_mapping"]
 
             self.data.append(encoded)
+        random.shuffle(self.data)
 
     def __len__(self):
         return len(self.data)
@@ -91,9 +93,9 @@ class MLMModel(Task2Model):
             output_dir=f"./{self.model_name}-output",
             num_train_epochs=1,
             per_device_train_batch_size=16,
-            logging_steps=10,
+            logging_steps=50,
             eval_strategy="steps",
-            eval_steps=10,
+            eval_steps=50,
             save_strategy="epoch",
         )
         data_collator = DataCollatorForTokenClassification(self.tokenizer)
@@ -122,11 +124,11 @@ class MLMModel(Task2Model):
                 sentence.clean_text, truncation=True, return_tensors="pt"
             )
             outputs = self.model(**encoded)
-            yield outputs.logits.argmax(-1).sum().item()
+            yield max(1, outputs.logits.argmax(-1).sum().item())
 
     def predict_statement_spans(
         self, sentences: Iterable[Sentence]
-    ) -> Generator[list[int]]:
+    ) -> Generator[list[list[int]]]:
         for sentence in sentences:
             encoded = self.tokenizer(
                 sentence.clean_text,
@@ -227,12 +229,17 @@ class MLMModel(Task2Model):
 
 # %%
 train_sentences = load_sentences("train")
+train_augmented_sentences = load_sentences("train_augmented_v2")
 test_sentences = load_sentences("test")
 
 # %%
+train_augmented_sentences_sample = random.sample(train_augmented_sentences, len(train_sentences))
+train_sentences_all = train_sentences + train_augmented_sentences_sample
+
+# %%
 model = MLMModel("google-bert/bert-base-multilingual-cased")
-model.train(train_sentences, test_sentences)
-model.save("bert-multi-1epoch-batch16")
+model.train(train_sentences_all, test_sentences)
+model.save("bert-multi-1epoch-batch16-aug50v2")
 
 # %%
 model = MLMModel("./bert-multi-1epoch-batch16")
@@ -264,3 +271,21 @@ for true_sentence, spans in zip(
 
 # %%
 model.evaluate_statement_spans(test_sentences)
+
+# %%
+pred_statement_spans = list(model.predict_statement_spans(test_sentences))
+
+# %%
+import csv
+
+with open("prediction.csv", "w") as f:
+    writer = csv.writer(f)
+    writer.writerow(["sent-id", "num_statements", "statement_spans"])
+    for sentence, pred in zip(test_sentences, pred_statement_spans):
+        writer.writerow(
+            [
+                sentence.id,
+                len(pred),
+                pred if len(pred) > 1 else None,
+            ]
+        )
