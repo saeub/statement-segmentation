@@ -47,7 +47,7 @@ class Task2Model(Task1Model):
     @abstractmethod
     def predict_statement_spans(
         self, sentence: Iterable[Sentence]
-    ) -> Iterable[list[int]]:
+    ) -> Iterable[list[list[int]]]:
         pass
 
     def evaluate_statement_spans(
