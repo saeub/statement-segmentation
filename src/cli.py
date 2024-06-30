@@ -5,6 +5,7 @@ import sys
 from pathlib import Path
 
 logger = logging.getLogger("cli")
+logging.basicConfig(level=logging.INFO)
 
 
 def train(args: argparse.Namespace):
@@ -36,6 +37,7 @@ def train(args: argparse.Namespace):
         num_epochs=args.num_epochs,
         batch_size=args.batch_size,
     )
+    logger.info(f"Saving model to {args.save_to}")
     model.save(args.save_to)
 
 
@@ -71,7 +73,7 @@ def main():
     )
 
     args = parser.parse_args()
-    logging.basicConfig(level=logging.INFO)
+    logger.info(" ".join(sys.argv))
 
     if args.command == "train":
         return train(args)

@@ -100,9 +100,9 @@ class MLMModel(Task2Model):
             output_dir=f"./{self.model_name}-output",
             num_train_epochs=num_epochs,
             per_device_train_batch_size=batch_size,
-            logging_steps=50,
-            eval_strategy="steps",
-            eval_steps=50,
+            logging_steps=10,
+            eval_strategy="steps" if dev_dataset else "no",
+            eval_steps=10,
             save_strategy="epoch",
         )
         data_collator = DataCollatorForTokenClassification(self.tokenizer)
