@@ -1,4 +1,3 @@
-# %%
 import ast
 import re
 from dataclasses import dataclass
@@ -9,10 +8,9 @@ import pandas as pd
 import spacy
 import spacy.tokens
 
-nlp = spacy.load("de_dep_news_trf")
+_nlp = spacy.load("de_dep_news_trf")
 
 
-# %%
 @dataclass(frozen=True)
 class Sentence:
     id: int
@@ -72,14 +70,16 @@ class Sentence:
         """Statement spans as (cleaned) strings."""
         statements = []
         for span in self.statement_spans:
-            tokens = [clean_token for i in span if (clean_token := self.clean_tokens[i])]
+            tokens = [
+                clean_token for i in span if (clean_token := self.clean_tokens[i])
+            ]
             statements.append(" ".join(tokens))
         return statements
 
     @cached_property
     def spacy_tokens(self) -> list[list[spacy.tokens.Token]]:
         """spaCy tokens parsed based on cleaned text but aligned with original (uncleaned) tokens."""
-        doc = nlp(self.clean_text)
+        doc = _nlp(self.clean_text)
 
         # Map spacy tokens to self tokens
         spacy_tokens = []
@@ -108,11 +108,7 @@ class Sentence:
         return spacy_tokens
 
 
-# %%
-DATA_PATH = Path(__name__).absolute().parent.parent / "data"
-
-
-def load_sentences(name: str) -> list[Sentence]:
-    data = pd.read_csv(DATA_PATH / f"{name}.csv")
+def load_sentences(filename: str | Path) -> list[Sentence]:
+    data = pd.read_csv(filename)
     sentences = list(data.apply(Sentence.from_row, axis=1))
     return sentences

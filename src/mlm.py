@@ -2,7 +2,6 @@
 import logging
 import random
 
-logging.basicConfig(level=logging.INFO)
 from collections.abc import Collection, Generator, Iterable
 
 from torch.utils.data import Dataset
@@ -12,6 +11,7 @@ from transformers import (
     DataCollatorForTokenClassification,
     Trainer,
     TrainingArguments,
+    set_seed,
 )
 
 from data import Sentence, load_sentences
@@ -64,6 +64,7 @@ class TokenTaggedDataset(Dataset):
             del encoded["offset_mapping"]
 
             self.data.append(encoded)
+        random.seed(42)
         random.shuffle(self.data)
 
     def __len__(self):
@@ -76,6 +77,7 @@ class TokenTaggedDataset(Dataset):
 class MLMModel(Task2Model):
     def __init__(self, model_name: str):
         self.model_name = model_name
+        set_seed(42)
         self.tokenizer = AutoTokenizer.from_pretrained(model_name)
         self.model = AutoModelForTokenClassification.from_pretrained(model_name)
         self.logger = logging.getLogger(self.__class__.__name__)
@@ -83,16 +85,21 @@ class MLMModel(Task2Model):
     def train(
         self,
         train_sentences: Collection[Sentence],
-        eval_sentences: Collection[Sentence],
+        dev_sentences: Collection[Sentence] | None,
+        *,
+        num_epochs: int,
+        batch_size: int,
     ):
         self.logger.info("Preprocessing data...")
         train_dataset = TokenTaggedDataset(train_sentences, self.tokenizer)
-        eval_dataset = TokenTaggedDataset(eval_sentences, self.tokenizer)
+        dev_dataset = TokenTaggedDataset(dev_sentences, self.tokenizer) if dev_sentences else None
 
+        set_seed(42)
+        # TODO: Support GPU
         training_args = TrainingArguments(
             output_dir=f"./{self.model_name}-output",
-            num_train_epochs=1,
-            per_device_train_batch_size=16,
+            num_train_epochs=num_epochs,
+            per_device_train_batch_size=batch_size,
             logging_steps=50,
             eval_strategy="steps",
             eval_steps=50,
@@ -103,7 +110,7 @@ class MLMModel(Task2Model):
             model=self.model,
             args=training_args,
             train_dataset=train_dataset,
-            eval_dataset=eval_dataset,
+            eval_dataset=dev_dataset,
             data_collator=data_collator,
         )
 
@@ -174,7 +181,9 @@ class MLMModel(Task2Model):
             spans = [[i] for i in tag_indices]
 
             def ignore(token):
-                return token.dep_ == "punct" or token.dep_ == "cc" or token.pos_ == "DET"
+                return (
+                    token.dep_ == "punct" or token.dep_ == "cc" or token.pos_ == "DET"
+                )
 
             # Find root token of each span
             tag_roots = []
@@ -225,67 +234,3 @@ class MLMModel(Task2Model):
                         assert not set(span) & set(other_span)
 
             yield expanded_spans
-
-
-# %%
-train_sentences = load_sentences("train")
-train_augmented_sentences = load_sentences("train_augmented_v2")
-test_sentences = load_sentences("test")
-
-# %%
-train_augmented_sentences_sample = random.sample(train_augmented_sentences, len(train_sentences))
-train_sentences_all = train_sentences + train_augmented_sentences_sample
-
-# %%
-model = MLMModel("google-bert/bert-base-multilingual-cased")
-model.train(train_sentences_all, test_sentences)
-model.save("bert-multi-1epoch-batch16-aug50v2")
-
-# %%
-model = MLMModel("./bert-multi-1epoch-batch16")
-
-# %%
-model.evaluate_num_statements(test_sentences)
-
-# %%
-for error in model.errors(test_sentences):
-    print(error.pred, error.true, error.sentence.clean_text)
-
-# %%
-for true_sentence, spans in zip(
-    test_sentences, model.predict_statement_spans(test_sentences)
-):
-    pred_sentence = Sentence(
-        id=true_sentence.id,
-        topic=true_sentence.topic,
-        text=true_sentence.text,
-        tokens=true_sentence.tokens,
-        clean_tokens=true_sentence.clean_tokens,
-        statement_spans=spans,
-    )
-    if len(true_sentence.statement_spans) > 1:
-        print(true_sentence.clean_text)
-        print(true_sentence.statements)
-        print(pred_sentence.statements)
-        print()
-
-# %%
-model.evaluate_statement_spans(test_sentences)
-
-# %%
-pred_statement_spans = list(model.predict_statement_spans(test_sentences))
-
-# %%
-import csv
-
-with open("prediction.csv", "w") as f:
-    writer = csv.writer(f)
-    writer.writerow(["sent-id", "num_statements", "statement_spans"])
-    for sentence, pred in zip(test_sentences, pred_statement_spans):
-        writer.writerow(
-            [
-                sentence.id,
-                len(pred),
-                pred if len(pred) > 1 else None,
-            ]
-        )
