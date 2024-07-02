@@ -18,7 +18,7 @@ class Sentence:
     text: str
     tokens: list[str]
     clean_tokens: list[str]
-    statement_spans: list[list[int]]
+    statement_spans: list[list[int]] | None
 
     @classmethod
     def from_row(cls, row: pd.Series) -> "Sentence":
@@ -27,7 +27,7 @@ class Sentence:
         for i, token in enumerate(row["phrase_tokenized"].split(" ")):
             match = re.match(r"^(\d+):=([^ ]*)$", token)
             assert match is not None, token
-            assert int(match.group(1)) == i
+            assert int(match.group(1)) == i, row
             token = match.group(2)
             tokens.append(token)
 
@@ -35,14 +35,17 @@ class Sentence:
             clean_token = re.sub(r"\s+", " ", clean_token)
             clean_tokens.append(clean_token.strip())
 
-        spans = row["statement_spans"]
-        num_statements = row["num_statements"]
-        if pd.notna(spans) and num_statements > 1:
-            spans = ast.literal_eval(spans)
-        elif num_statements > 0:
-            spans = [[i for i in range(len(tokens))]]
+        if "statement_spans" in row:
+            spans = row["statement_spans"]
+            num_statements = row["num_statements"]
+            if pd.notna(spans) and num_statements > 1:
+                spans = ast.literal_eval(spans)
+            elif num_statements > 0:
+                spans = [[i for i in range(len(tokens))]]
+            else:
+                spans = []
         else:
-            spans = []
+            spans = None
 
         return cls(
             id=row["sent-id"],
