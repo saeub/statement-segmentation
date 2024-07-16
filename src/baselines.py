@@ -57,8 +57,8 @@ class POSBaseline(Task1Model):
 # %%
 from data import load_sentences
 
-train_sentences = load_sentences("train")
-test_sentences = load_sentences("test")
+train_sentences = load_sentences("../data/train.csv")
+test_sentences = load_sentences("../data/test.csv")
 
 # %%
 baselines = []

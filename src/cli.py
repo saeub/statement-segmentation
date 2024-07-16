@@ -1,4 +1,7 @@
 import argparse
+import ast
+import csv
+import json
 import logging
 import random
 import sys
@@ -50,6 +53,36 @@ def predict(args: argparse.Namespace):
     model.predict_to_csv(test_sentences, args.outfile)
 
 
+def evaluate(args: argparse.Namespace):
+    from data import load_sentences
+    from evaluation import evaluate_num_statements, evaluate_statement_spans
+
+    test_sentences = load_sentences(args.testset)
+    reader = csv.DictReader(args.predictions)
+    predictions = [
+        (
+            int(row["num_statements"]),
+            (
+                ast.literal_eval(row["statement_spans"])
+                if row["statement_spans"]
+                else None
+            ),
+        )
+        for row in reader
+    ]
+    assert len(predictions) == len(
+        test_sentences
+    ), f"Expected {len(test_sentences)} predictions, got {len(predictions)}"
+
+    metrics_task1 = evaluate_num_statements(
+        [num for num, _ in predictions], test_sentences
+    )
+    metrics_task2 = evaluate_statement_spans(
+        [spans for _, spans in predictions], test_sentences
+    )
+    print(json.dumps({"task1": metrics_task1, "task2": metrics_task2}, indent=2))
+
+
 def main():
     parser = argparse.ArgumentParser()
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -72,6 +105,12 @@ def main():
         "--outfile", type=argparse.FileType("w", encoding="utf-8"), default=sys.stdout
     )
 
+    predict_parser = subparsers.add_parser("evaluate")
+    predict_parser.add_argument(
+        "--predictions", type=argparse.FileType(encoding="utf-8"), default=sys.stdin
+    )
+    predict_parser.add_argument("--testset", type=Path, required=True)
+
     args = parser.parse_args()
     logger.info(" ".join(sys.argv))
 
@@ -79,6 +118,8 @@ def main():
         return train(args)
     if args.command == "predict":
         return predict(args)
+    if args.command == "evaluate":
+        return evaluate(args)
 
 
 if __name__ == "__main__":

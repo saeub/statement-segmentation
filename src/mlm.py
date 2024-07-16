@@ -97,12 +97,12 @@ class MLMModel(Task2Model):
         set_seed(42)
         # TODO: Support GPU
         training_args = TrainingArguments(
-            output_dir=f"./{self.model_name}-output",
+            output_dir=f"model-output/{self.model_name}",
             num_train_epochs=num_epochs,
             per_device_train_batch_size=batch_size,
-            logging_steps=10,
+            logging_steps=50,
             eval_strategy="steps" if dev_dataset else "no",
-            eval_steps=10,
+            eval_steps=50,
             save_strategy="epoch",
         )
         data_collator = DataCollatorForTokenClassification(self.tokenizer)
@@ -149,7 +149,7 @@ class MLMModel(Task2Model):
             labels = outputs.logits.argmax(-1)[0]
 
             if sum(labels) == 0:
-                yield []
+                yield [[i for i in range(len(sentence.tokens))]]
                 continue
 
             if sum(labels) == 1:
