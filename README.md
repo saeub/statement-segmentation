@@ -4,7 +4,7 @@ This repository contains the code for our submission to the [*Statement Segmenta
 
 The two subtasks are:
 1. **Determining the number of statements** in a sentence. The number of statements can be 0, 1, or more. Label Format: `2`.
-2. If there is more than one statement in the sentence, **annotating the statement spans**. The statements can be non-contiguous and may overlap. Label Format: `[[1, 2], [4, 5, 6]]`.
+2. If there is more than one statement in the sentence, **annotating the statement spans**. The statements can be discontinuous and may overlap. Label Format: `[[1, 2], [4, 5, 6]]`.
 
 The concept of *statement* is defined within the framework of valency grammar: A verb demands different arguments, its valency determines the number of arguments. All *optional* arguments are considered additional statements.
 
