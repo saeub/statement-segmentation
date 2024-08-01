@@ -33,7 +33,7 @@ def train(args: argparse.Namespace):
     logger.info(
         f"Training model on {train_size + augment_size} samples ({train_size} train + {augment_size} augmented)"
     )
-    model = MLMModel(args.base_model)
+    model = MLMModel(args.base_model, args.tokenizer)
     model.train(
         train_sentences,
         dev_sentences,
@@ -49,7 +49,7 @@ def predict(args: argparse.Namespace):
     from mlm import MLMModel
 
     test_sentences = load_sentences(args.testset)
-    model = MLMModel(args.model)
+    model = MLMModel(args.model, args.tokenizer)
     model.predict_to_csv(test_sentences, args.outfile)
 
 
@@ -89,6 +89,7 @@ def main():
 
     train_parser = subparsers.add_parser("train")
     train_parser.add_argument("--base-model", required=True)
+    train_parser.add_argument("--tokenizer", required=False)
     train_parser.add_argument("--trainset", type=Path, required=True)
     train_parser.add_argument("--devset", type=Path)
     train_parser.add_argument("--augment-trainset", type=Path)
@@ -100,6 +101,7 @@ def main():
 
     predict_parser = subparsers.add_parser("predict")
     predict_parser.add_argument("--model", type=Path, required=True)
+    predict_parser.add_argument("--tokenizer", required=False)
     predict_parser.add_argument("--testset", type=Path, required=True)
     predict_parser.add_argument(
         "--outfile", type=argparse.FileType("w", encoding="utf-8"), default=sys.stdout

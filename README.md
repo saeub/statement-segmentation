@@ -10,15 +10,32 @@ The concept of *statement* is defined within the framework of valency grammar: A
 
 ## Instructions
 
-- Install dependencies: `pip install -r requirements.txt`
-- Train all models (grid search): `./train_all.sh`  
-  Models will be stored in the `models` directory.
-- Predict on test data: `python src/cli.py predict --model [model-path] --testset data/test.csv --outfile prediction.csv`
-- Evaluate: `python src/cli.py predict --model [model-path] --testset data/test.csv --predictions prediction.csv`
+Install dependencies:  
+```bash
+pip install -r requirements.txt
+```
+
+To **train** all models (grid search):  
+```bash
+./train_all.sh
+```
+Models will be stored in the `models` directory.
+
+To reproduce the **predictions** for our submission:  
+```bash
+python src/cli.py predict --model saeub/bert-stage --tokenizer google-bert/bert-base-multilingual-cased --testset data/eval_blind.csv --outfile predictions.csv
+```
+
+To **evaluate** predictions:
+```bash
+python src/cli.py evaluate --predictions predictions.csv --testset data/eval.csv
+```
 
 ## Results
 
 Full results from our grid search can be found in [`results.tsv`](results.tsv).
+
+Our submitted model is available on the [Hugging Face Hub](https://huggingface.co/saeub/bert-stage).
 
 ## License
 

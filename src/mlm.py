@@ -14,7 +14,7 @@ from transformers import (
     set_seed,
 )
 
-from data import Sentence, load_sentences
+from data import Sentence
 from model import Task2Model
 
 
@@ -75,10 +75,10 @@ class TokenTaggedDataset(Dataset):
 
 
 class MLMModel(Task2Model):
-    def __init__(self, model_name: str):
+    def __init__(self, model_name: str, tokenizer_name: str | None = None):
         self.model_name = model_name
         set_seed(42)
-        self.tokenizer = AutoTokenizer.from_pretrained(model_name)
+        self.tokenizer = AutoTokenizer.from_pretrained(tokenizer_name or model_name)
         self.model = AutoModelForTokenClassification.from_pretrained(model_name)
         self.logger = logging.getLogger(self.__class__.__name__)
 
